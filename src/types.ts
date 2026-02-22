@@ -40,6 +40,7 @@ export interface DiffViewerProps {
   onRefresh?: () => void;
   onPushAll?: () => void;
   pushingAll?: boolean;
+  showPushIndicator?: boolean;
   onBack?: () => void;
   mobile?: boolean;
   fileContextActions?: ContextMenuAction[];

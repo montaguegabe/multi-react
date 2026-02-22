@@ -62,6 +62,7 @@ export const DiffViewer = ({
   onRefresh,
   onPushAll,
   pushingAll = false,
+  showPushIndicator = false,
   onBack,
   mobile = false,
   fileContextActions,
@@ -286,7 +287,13 @@ export const DiffViewer = ({
               disabled={pushingAll}
               className="px-3 py-1.5 text-sm rounded-lg border border-border hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {pushingAll ? 'Syncing...' : 'Sync All'}
+              {pushingAll
+                ? showPushIndicator
+                  ? 'Pushing...'
+                  : 'Syncing...'
+                : showPushIndicator
+                  ? '↑ Push'
+                  : 'Sync All'}
             </button>
           )}
           {onRefresh && (
