@@ -5,11 +5,21 @@ export type {
   DiffViewerProps,
   ContextMenuTarget,
   ContextMenuAction,
+  NativeContextMenuItem,
   DiscardTarget,
+  HistoryCommit,
+  HistoryGroup,
+  HistoryCommitRef,
+  HistoryRepoDiff,
 } from './types';
 export { cn } from './utils/cn';
 export { DiffSelection, DiffSelectionType } from './models/DiffSelection';
 export { formatPatch, formatDiscardPatch } from './utils/formatPatch';
+export {
+  getDisplayPath,
+  getFileStatus,
+  buildRepoFileEntries,
+} from './utils/diffEntries';
 
 // Wrapper around diff2html that preserves "\ No newline at end of file" info
 export { parseDiff } from './utils/parseDiff';
