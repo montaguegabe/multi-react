@@ -230,6 +230,20 @@ export const DiffViewer = ({
 
   const repoNames = Object.keys(byRepo);
   const totalFiles = entries.length;
+  const globalSelectionState = useMemo(() => {
+    if (!selections || !onSelectionChange || entries.length === 0) return null;
+
+    const types = entries.map(
+      (entry) =>
+        selections[entry.key]?.getSelectionType() ?? DiffSelectionType.All,
+    );
+    const allAll = types.every((t) => t === DiffSelectionType.All);
+    const allNone = types.every((t) => t === DiffSelectionType.None);
+    return {
+      checked: allAll,
+      indeterminate: !allAll && !allNone,
+    };
+  }, [entries, selections, onSelectionChange]);
 
   return (
     <div className="flex flex-col h-full">
@@ -258,12 +272,11 @@ export const DiffViewer = ({
           )}
           <div>
             <h1 className="text-xl font-semibold">{title}</h1>
-            <p className="text-xs text-muted-foreground">
-              {totalFiles} file{totalFiles !== 1 ? 's' : ''} changed
-              {repoNames.length > 1
-                ? ` across ${repoNames.length} repos`
-                : ''}
-            </p>
+            {repoNames.length > 1 && (
+              <p className="text-xs text-muted-foreground">
+                {repoNames.length} repos
+              </p>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -300,6 +313,33 @@ export const DiffViewer = ({
             className={`${sidebarOpen ? '' : 'w-0 overflow-hidden'} shrink-0 border-r border-border overflow-y-auto bg-muted/30 ${resizing ? '' : 'transition-all duration-200'}`}
             style={sidebarOpen ? { width: sidebarWidth } : undefined}
           >
+            {globalSelectionState && (
+              <div className="w-full px-3 py-2 flex items-center gap-2 text-xs bg-muted/50 border-b border-border">
+                <input
+                  type="checkbox"
+                  ref={(el) => {
+                    if (el) el.indeterminate = globalSelectionState.indeterminate;
+                  }}
+                  className="shrink-0 accent-blue-500"
+                  checked={globalSelectionState.checked}
+                  onChange={(e) => {
+                    if (!onSelectionChange) return;
+                    const checked = e.target.checked;
+                    for (const entry of entries) {
+                      const sel = selections?.[entry.key];
+                      if (!sel) continue;
+                      onSelectionChange(
+                        entry.key,
+                        checked ? sel.withSelectAll() : sel.withSelectNone(),
+                      );
+                    }
+                  }}
+                />
+                <span className="text-muted-foreground">
+                  {totalFiles} file{totalFiles !== 1 ? 's' : ''} changed
+                </span>
+              </div>
+            )}
             {repoNames.map((repoName) => {
               const isCollapsed = !!collapsedRepos[repoName];
               const repoFiles = byRepo[repoName];

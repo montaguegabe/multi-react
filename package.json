@@ -15,7 +15,8 @@
   "files": ["dist"],
   "scripts": {
     "build": "tsup",
-    "dev": "tsup --watch"
+    "dev": "tsup --watch",
+    "test": "npm run build && node --test test/*.test.cjs"
   },
   "dependencies": {
     "clsx": "^2.1.1",

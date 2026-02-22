@@ -3,9 +3,10 @@ import type { DiffFile } from 'diff2html/lib/types';
 
 /**
  * diff2html silently drops "\ No newline at end of file" markers.
+ * It can also rewrite line.content for lines that literally contain that text.
  * This wrapper calls diff2html's parse(), then re-scans the raw diff text
- * to annotate each DiffLine that was followed by the marker with a
- * `noNewlineAtEnd` flag so patch generators can re-emit it.
+ * to restore exact line content and annotate each DiffLine that was followed by
+ * the marker with a `noNewlineAtEnd` flag so patch generators can re-emit it.
  */
 export function parseDiff(rawDiff: string): DiffFile[] {
   const files = parse(rawDiff);
@@ -40,7 +41,10 @@ function annotateNoNewline(rawDiff: string, files: DiffFile[]): void {
           continue;
         }
 
-        // This raw line corresponds to the current parsed line
+        // This raw line corresponds to the current parsed line.
+        // Keep exact content from raw diff so sequences like
+        // "\\ No newline at end of file" inside normal source text are preserved.
+        (block.lines[parsedIdx] as any).content = rawLine;
         parsedIdx++;
         rawIdx++;
       }
