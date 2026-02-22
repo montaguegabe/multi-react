@@ -23,6 +23,7 @@ export interface DiffRendererProps {
   selection?: DiffSelection;
   onSelectionChange?: (selection: DiffSelection) => void;
   onLineContextMenu?: (e: React.MouseEvent, lineIndex: number, groupInfo?: GroupInfo, groupOnly?: boolean) => void;
+  imageSrc?: string;
 }
 
 export const DiffRenderer = ({
@@ -30,6 +31,7 @@ export const DiffRenderer = ({
   selection,
   onSelectionChange,
   onLineContextMenu,
+  imageSrc,
 }: DiffRendererProps) => {
   const dragRef = useRef<{
     startIndex: number;
@@ -185,6 +187,14 @@ export const DiffRenderer = ({
     number | null
   >(null);
 
+  const isImageFile = useMemo(() => {
+    const candidate = file.newName !== '/dev/null' ? file.newName : file.oldName;
+    const normalized = candidate.replace(/^[ab]\//, '').toLowerCase();
+    return /\.(avif|bmp|gif|heic|heif|ico|jpe?g|png|svg|tiff?|webp)$/.test(
+      normalized,
+    );
+  }, [file.newName, file.oldName]);
+
   const handleGroupToggle = useCallback(
     (group: GroupInfo) => {
       if (!localSelection || !onSelectionChange) return;
@@ -208,6 +218,22 @@ export const DiffRenderer = ({
   );
 
   if (file.isBinary) {
+    if (imageSrc && isImageFile && !file.isDeleted) {
+      return (
+        <div className="px-4 py-4">
+          <div className="text-xs text-muted-foreground mb-2">
+            Current image preview
+          </div>
+          <img
+            src={imageSrc}
+            alt={file.newName.replace(/^[ab]\//, '')}
+            className="max-w-full max-h-[70vh] rounded border border-border bg-muted/20 object-contain"
+            loading="lazy"
+          />
+        </div>
+      );
+    }
+
     return (
       <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
         Binary file — no line-level diff available

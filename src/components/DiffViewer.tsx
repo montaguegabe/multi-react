@@ -1,15 +1,11 @@
 import {
   ArrowLeft,
-  ChevronDown,
-  ChevronRight,
   PanelLeftClose,
   PanelLeftOpen,
   RefreshCw,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState, type RefCallback } from 'react';
-import type { DiffFile } from 'diff2html/lib/types.js';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
-  ContextMenuAction,
   ContextMenuTarget,
   NativeContextMenuItem,
   DiscardTarget,
@@ -18,60 +14,20 @@ import type {
   HistoryRepoDiff,
 } from '../types';
 import type { GroupInfo } from './DiffRenderer';
-import { DiffRenderer } from './DiffRenderer';
 import { DiffSelectionType } from '../models/DiffSelection';
 import { ConfirmDialog } from './ConfirmDialog';
-import { cn } from '../utils/cn';
 import { parseDiff } from '../utils/parseDiff';
 import {
   buildRepoFileEntries,
   getDisplayPath,
   getFileStatus,
 } from '../utils/diffEntries';
-
-function statusLabel(s: FileEntry['status']): string {
-  switch (s) {
-    case 'added':
-      return 'A';
-    case 'deleted':
-      return 'D';
-    case 'renamed':
-      return 'R';
-    case 'modified':
-      return 'M';
-  }
-}
-
-function statusColor(s: FileEntry['status']): string {
-  switch (s) {
-    case 'added':
-      return 'text-green-500';
-    case 'deleted':
-      return 'text-red-500';
-    case 'renamed':
-      return 'text-blue-500';
-    case 'modified':
-      return 'text-yellow-500';
-  }
-}
-
-function formatHistoryTimestamp(timestampMs: number): string {
-  return new Date(timestampMs).toLocaleString([], {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
-
-type HistoryDiffEntry = {
-  key: string;
-  repoName: string;
-  repoPath: string;
-  displayPath: string;
-  status: FileEntry['status'];
-  file: DiffFile;
-};
+import { DiffViewerContent } from './DiffViewerContent';
+import { DiffViewerSidebar } from './DiffViewerSidebar';
+import {
+  getCurrentFilePreviewUrl,
+  type HistoryDiffEntry,
+} from './DiffViewer.shared';
 
 export const DiffViewer = ({
   repositories,
@@ -326,6 +282,10 @@ export const DiffViewer = ({
   const selectedEntry = useMemo(
     () => entries.find((e) => e.key === selectedKey) ?? null,
     [entries, selectedKey],
+  );
+  const selectedEntryPreviewUrl = useMemo(
+    () => getCurrentFilePreviewUrl(selectedEntry),
+    [selectedEntry],
   );
 
   const selectedHistoryGroup = useMemo(
@@ -724,272 +684,37 @@ export const DiffViewer = ({
         </div>
       ) : (
         <div className={`flex flex-1 min-h-0 ${resizing ? 'select-none' : ''}`}>
-          {/* Left panel: file list */}
           <div
-            className={`${sidebarOpen ? '' : 'w-0 overflow-hidden'} shrink-0 border-r border-border overflow-y-auto bg-muted/30 ${resizing ? '' : 'transition-all duration-200'}`}
+            className={`${sidebarOpen ? '' : 'w-0 overflow-hidden'} ${resizing ? '' : 'transition-all duration-200'}`}
             style={sidebarOpen ? { width: sidebarWidth } : undefined}
           >
-            {hasHistoryTab && (
-              <div className="flex border-b border-border shrink-0">
-                <button
-                  onClick={() => setActiveSidebarTab('files')}
-                  className={cn(
-                    'flex-1 px-3 py-2 text-xs font-medium transition-colors',
-                    activeSidebarTab === 'files'
-                      ? 'text-foreground border-b-2 border-primary'
-                      : 'text-muted-foreground hover:text-foreground',
-                  )}
-                >
-                  Files
-                </button>
-                <button
-                  onClick={() => setActiveSidebarTab('history')}
-                  className={cn(
-                    'flex-1 px-3 py-2 text-xs font-medium transition-colors',
-                    activeSidebarTab === 'history'
-                      ? 'text-foreground border-b-2 border-primary'
-                      : 'text-muted-foreground hover:text-foreground',
-                  )}
-                >
-                  History
-                </button>
-              </div>
-            )}
-
-            {activeSidebarTab === 'files' ? (
-              <>
-                {globalSelectionState && (
-                  <div className="w-full px-3 py-2 flex items-center gap-2 text-xs bg-muted/50 border-b border-border">
-                    <input
-                      type="checkbox"
-                      ref={(el) => {
-                        if (el) el.indeterminate = globalSelectionState.indeterminate;
-                      }}
-                      className="shrink-0 accent-blue-500"
-                      checked={globalSelectionState.checked}
-                      onChange={(e) => {
-                        if (!onSelectionChange) return;
-                        const checked = e.target.checked;
-                        for (const entry of entries) {
-                          const sel = selections?.[entry.key];
-                          if (!sel) continue;
-                          onSelectionChange(
-                            entry.key,
-                            checked ? sel.withSelectAll() : sel.withSelectNone(),
-                          );
-                        }
-                      }}
-                    />
-                    <span className="text-muted-foreground">
-                      {totalFiles} file{totalFiles !== 1 ? 's' : ''} changed
-                    </span>
-                  </div>
-                )}
-                {repoNames.map((repoName) => {
-                  const isCollapsed = !!collapsedRepos[repoName];
-                  const repoFiles = byRepo[repoName];
-                  const hasFiles = repoFiles.length > 0;
-                  return (
-                    <div key={repoName}>
-                      {repoNames.length > 1 && (
-                        <div
-                          role={hasFiles ? 'button' : undefined}
-                          tabIndex={hasFiles ? 0 : undefined}
-                          onClick={
-                            hasFiles
-                              ? () =>
-                                  setCollapsedRepos((prev) => ({
-                                    ...prev,
-                                    [repoName]: !prev[repoName],
-                                  }))
-                              : undefined
-                          }
-                          onContextMenu={(e) =>
-                            handleContextMenu(e, {
-                              repoName,
-                              repoPath: repoPathByName[repoName] ?? '',
-                              displayPath: '',
-                            }, undefined)
-                          }
-                          className={`w-full px-3 py-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider bg-muted/50 border-b border-border select-none ${hasFiles ? 'text-muted-foreground hover:bg-accent/50' : 'text-muted-foreground/40'} transition-colors`}
-                        >
-                          {/* Repo-level checkbox (derived from per-file selections) */}
-                          {selections && onSelectionChange && (() => {
-                            if (!hasFiles) {
-                              return (
-                                <input
-                                  type="checkbox"
-                                  className="shrink-0 opacity-30"
-                                  checked={false}
-                                  disabled
-                                  readOnly
-                                />
-                              );
-                            }
-                            const types = repoFiles.map(
-                              (f) => selections[f.key]?.getSelectionType() ?? DiffSelectionType.All,
-                            );
-                            const allAll = types.every((t) => t === DiffSelectionType.All);
-                            const allNone = types.every((t) => t === DiffSelectionType.None);
-                            const repoChecked = allAll;
-                            const repoIndeterminate = !allAll && !allNone;
-                            const refCb: RefCallback<HTMLInputElement> = (el) => {
-                              if (el) el.indeterminate = repoIndeterminate;
-                            };
-                            return (
-                              <input
-                                type="checkbox"
-                                ref={refCb}
-                                className="shrink-0 accent-blue-500"
-                                checked={repoChecked}
-                                onChange={(e) => {
-                                  e.stopPropagation();
-                                  const checked = e.target.checked;
-                                  for (const f of repoFiles) {
-                                    const sel = selections[f.key];
-                                    if (!sel) continue;
-                                    onSelectionChange(
-                                      f.key,
-                                      checked ? sel.withSelectAll() : sel.withSelectNone(),
-                                    );
-                                  }
-                                }}
-                                onClick={(e) => e.stopPropagation()}
-                              />
-                            );
-                          })()}
-                          {hasFiles && isCollapsed ? (
-                            <ChevronRight className="h-3 w-3 shrink-0" />
-                          ) : (
-                            <ChevronDown
-                              className={`h-3 w-3 shrink-0 ${hasFiles ? '' : 'opacity-30'}`}
-                            />
-                          )}
-                          <span className="truncate">{repoName}</span>
-                          <span className="ml-auto text-[10px] font-normal tabular-nums">
-                            {hasFiles ? repoFiles.length : 'clean'}
-                          </span>
-                        </div>
-                      )}
-                      {!isCollapsed &&
-                        byRepo[repoName].map((entry) => {
-                          const sel = selections?.[entry.key];
-                          const selType = sel?.getSelectionType();
-                          const fileChecked = selType === DiffSelectionType.All;
-                          const fileIndeterminate = selType === DiffSelectionType.Partial;
-                          const fileNone = selType === DiffSelectionType.None;
-                          const fileRefCb: RefCallback<HTMLInputElement> = (el) => {
-                            if (el) el.indeterminate = fileIndeterminate;
-                          };
-                          return (
-                            <button
-                              key={entry.key}
-                              ref={(el) => {
-                                fileEntryButtonRefs.current[entry.key] = el;
-                              }}
-                              onClick={() => {
-                                setSelectedKey(entry.key);
-                                if (mobile) setSidebarOpen(false);
-                              }}
-                              onContextMenu={(e) => handleContextMenu(e, entry, entry)}
-                              className={cn(
-                                'w-full text-left pl-3 pr-3 py-1.5 flex items-center gap-2 text-sm transition-colors border-b border-border/50',
-                                selectedKey === entry.key
-                                  ? 'bg-primary/10 border-l-2 border-l-primary pl-[10px] font-medium'
-                                  : 'hover:bg-accent/50',
-                                fileNone && 'opacity-50',
-                              )}
-                            >
-                              {/* File-level checkbox (derived from line selections) */}
-                              {selections && onSelectionChange && sel && (
-                                <input
-                                  type="checkbox"
-                                  ref={fileRefCb}
-                                  className="shrink-0 accent-blue-500"
-                                  checked={fileChecked}
-                                  onChange={(e) => {
-                                    e.stopPropagation();
-                                    onSelectionChange(
-                                      entry.key,
-                                      e.target.checked ? sel.withSelectAll() : sel.withSelectNone(),
-                                    );
-                                  }}
-                                  onClick={(e) => e.stopPropagation()}
-                                />
-                              )}
-                              <span
-                                className={`shrink-0 text-xs font-mono font-bold w-4 text-center ${statusColor(entry.status)}`}
-                              >
-                                {statusLabel(entry.status)}
-                              </span>
-                              <span
-                                className="truncate text-xs"
-                                title={entry.displayPath}
-                              >
-                                {entry.displayPath}
-                              </span>
-                            </button>
-                          );
-                        })}
-                    </div>
-                  );
-                })}
-              </>
-            ) : (
-              <div className="divide-y divide-border">
-                {historyLoading ? (
-                  <div className="px-3 py-4 text-xs text-muted-foreground">
-                    Loading history...
-                  </div>
-                ) : combinedHistory.length === 0 ? (
-                  <div className="px-3 py-4 text-xs text-muted-foreground">
-                    No commits found.
-                  </div>
-                ) : (
-                  combinedHistory.map((group) => {
-                    const selected = selectedHistoryGroupId === group.id;
-                    return (
-                      <button
-                        key={group.id}
-                        ref={(el) => {
-                          historyGroupButtonRefs.current[group.id] = el;
-                        }}
-                        onClick={() => {
-                          setSelectedHistoryGroupId(group.id);
-                          if (mobile) setSidebarOpen(false);
-                        }}
-                        onContextMenu={(e) =>
-                          void handleHistoryGroupContextMenu(e, group.id)
-                        }
-                        className={cn(
-                          'w-full px-3 py-2 text-left transition-colors',
-                          selected
-                            ? 'bg-primary/10 border-l-2 border-l-primary pl-[10px]'
-                            : 'hover:bg-accent/50',
-                        )}
-                      >
-                        <div className="text-[11px] text-muted-foreground">
-                          {formatHistoryTimestamp(group.newestAuthoredAtMs)}
-                        </div>
-                        <div className="mt-1 space-y-1">
-                          {group.commits.map((commit) => (
-                            <div key={`${group.id}-${commit.hash}`} className="min-w-0">
-                              <div className="text-xs font-medium truncate">
-                                {commit.repoName}: {commit.subject}
-                              </div>
-                              <div className="text-[11px] text-muted-foreground truncate">
-                                {commit.description ||
-                                  `${commit.shortHash} • ${commit.authorName || commit.authorEmail}`}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </button>
-                    );
-                  })
-                )}
-              </div>
-            )}
+            <DiffViewerSidebar
+              hasHistoryTab={hasHistoryTab}
+              activeSidebarTab={activeSidebarTab}
+              setActiveSidebarTab={setActiveSidebarTab}
+              globalSelectionState={globalSelectionState}
+              totalFiles={totalFiles}
+              entries={entries}
+              selections={selections}
+              onSelectionChange={onSelectionChange}
+              repoNames={repoNames}
+              byRepo={byRepo}
+              collapsedRepos={collapsedRepos}
+              setCollapsedRepos={setCollapsedRepos}
+              selectedKey={selectedKey}
+              setSelectedKey={setSelectedKey}
+              mobile={mobile}
+              setSidebarOpen={setSidebarOpen}
+              handleContextMenu={handleContextMenu}
+              repoPathByName={repoPathByName}
+              fileEntryButtonRefs={fileEntryButtonRefs}
+              historyLoading={historyLoading}
+              combinedHistory={combinedHistory}
+              selectedHistoryGroupId={selectedHistoryGroupId}
+              setSelectedHistoryGroupId={setSelectedHistoryGroupId}
+              historyGroupButtonRefs={historyGroupButtonRefs}
+              handleHistoryGroupContextMenu={handleHistoryGroupContextMenu}
+            />
           </div>
 
           {/* Resize handle */}
@@ -1000,165 +725,26 @@ export const DiffViewer = ({
             />
           )}
 
-          {/* Right panel: diff content + commit panel */}
-          <div className="flex-1 flex flex-col min-w-0">
-            <div className="flex-1 overflow-auto min-w-0">
-              {activeSidebarTab === 'history' ? (
-                historyLoading ? (
-                  <div className="flex items-center justify-center h-full text-muted-foreground">
-                    Loading history...
-                  </div>
-                ) : selectedHistoryGroup ? (
-                  historyDiffLoadingGroupId === selectedHistoryGroup.id ? (
-                    <div className="flex items-center justify-center h-full text-muted-foreground">
-                      Loading grouped diff...
-                    </div>
-                  ) : selectedHistoryEntries.length > 0 ? (
-                    <div className="divide-y divide-border">
-                      <div className="px-4 py-2.5 text-xs text-muted-foreground bg-muted/30">
-                        {selectedHistoryGroup.commits.length} commit
-                        {selectedHistoryGroup.commits.length === 1 ? '' : 's'} across{' '}
-                        {selectedHistoryGroup.repoNames.length} repo
-                        {selectedHistoryGroup.repoNames.length === 1 ? '' : 's'}{' '}
-                        • {selectedHistoryEntries.length} file
-                        {selectedHistoryEntries.length === 1 ? '' : 's'} changed
-                      </div>
-                      {[...selectedHistoryEntriesByRepo.entries()].map(
-                        ([repoPath, repoGroup]) => {
-                          const repoCollapseKey = `${selectedHistoryGroup.id}::${repoPath}`;
-                          const repoCollapsed = collapsedHistoryRepos[repoCollapseKey] ?? false;
-
-                          return (
-                            <div key={repoCollapseKey} className="border-b border-border/50">
-                              <button
-                                onClick={() =>
-                                  setCollapsedHistoryRepos((previous) => ({
-                                    ...previous,
-                                    [repoCollapseKey]: !repoCollapsed,
-                                  }))
-                                }
-                                onContextMenu={(e) =>
-                                  handleContextMenu(
-                                    e,
-                                    {
-                                      repoName: repoGroup.repoName,
-                                      repoPath: repoGroup.repoPath,
-                                      displayPath: '',
-                                    },
-                                    undefined,
-                                  )
-                                }
-                                className="w-full px-4 py-2 text-xs flex items-center gap-2 bg-muted/20 hover:bg-muted/30 transition-colors"
-                              >
-                                {repoCollapsed ? (
-                                  <ChevronRight className="h-3 w-3 shrink-0" />
-                                ) : (
-                                  <ChevronDown className="h-3 w-3 shrink-0" />
-                                )}
-                                <span className="font-medium truncate">{repoGroup.repoName}</span>
-                                <span className="ml-auto text-[11px] text-muted-foreground">
-                                  {repoGroup.entries.length} file
-                                  {repoGroup.entries.length === 1 ? '' : 's'}
-                                </span>
-                              </button>
-
-                              {!repoCollapsed &&
-                                repoGroup.entries.map((entry) => {
-                                  const fileCollapseKey = `${selectedHistoryGroup.id}::${entry.key}`;
-                                  const fileCollapsed =
-                                    collapsedHistoryFiles[fileCollapseKey] ?? false;
-
-                                  return (
-                                    <div
-                                      key={entry.key}
-                                      className="border-t border-border/50"
-                                    >
-                                      <button
-                                        onClick={() =>
-                                          setCollapsedHistoryFiles((previous) => ({
-                                            ...previous,
-                                            [fileCollapseKey]: !fileCollapsed,
-                                          }))
-                                        }
-                                        onContextMenu={(e) =>
-                                          handleContextMenu(
-                                            e,
-                                            {
-                                              repoName: entry.repoName,
-                                              repoPath: entry.repoPath,
-                                              displayPath: entry.displayPath,
-                                            },
-                                            undefined,
-                                          )
-                                        }
-                                        className="w-full px-4 py-2 text-xs flex items-center gap-2 hover:bg-accent/40 transition-colors"
-                                      >
-                                        {fileCollapsed ? (
-                                          <ChevronRight className="h-3 w-3 shrink-0" />
-                                        ) : (
-                                          <ChevronDown className="h-3 w-3 shrink-0" />
-                                        )}
-                                        <span
-                                          className={`shrink-0 text-xs font-mono font-bold w-4 text-center ${statusColor(entry.status)}`}
-                                        >
-                                          {statusLabel(entry.status)}
-                                        </span>
-                                        <span
-                                          className="truncate"
-                                          title={entry.displayPath}
-                                        >
-                                          {entry.displayPath}
-                                        </span>
-                                      </button>
-
-                                      {!fileCollapsed && (
-                                        <DiffRenderer file={entry.file} />
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                            </div>
-                          );
-                        },
-                      )}
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-center h-full text-muted-foreground">
-                      No file diff available for this history group
-                    </div>
-                  )
-                ) : (
-                  <div className="flex items-center justify-center h-full text-muted-foreground">
-                    No history selected
-                  </div>
-                )
-              ) : (
-                <>
-                  {selectedEntry ? (
-                    <DiffRenderer
-                      file={selectedEntry.file}
-                      selection={selections?.[selectedEntry.key]}
-                      onSelectionChange={
-                        onSelectionChange
-                          ? (sel) => onSelectionChange(selectedEntry.key, sel)
-                          : undefined
-                      }
-                      onLineContextMenu={onDiscard ? handleLineContextMenu : undefined}
-                    />
-                  ) : (
-                    <div className="flex items-center justify-center h-full text-muted-foreground">
-                      Select a file to view its diff
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-            {activeSidebarTab === 'files' && commitPanel && (
-              <div className="shrink-0 border-t border-border">
-                {commitPanel}
-              </div>
-            )}
-          </div>
+          <DiffViewerContent
+            activeSidebarTab={activeSidebarTab}
+            historyLoading={historyLoading}
+            selectedHistoryGroup={selectedHistoryGroup}
+            historyDiffLoadingGroupId={historyDiffLoadingGroupId}
+            selectedHistoryEntries={selectedHistoryEntries}
+            selectedHistoryEntriesByRepo={selectedHistoryEntriesByRepo}
+            collapsedHistoryRepos={collapsedHistoryRepos}
+            setCollapsedHistoryRepos={setCollapsedHistoryRepos}
+            collapsedHistoryFiles={collapsedHistoryFiles}
+            setCollapsedHistoryFiles={setCollapsedHistoryFiles}
+            handleContextMenu={handleContextMenu}
+            selectedEntry={selectedEntry}
+            selections={selections}
+            onSelectionChange={onSelectionChange}
+            onDiscard={onDiscard}
+            handleLineContextMenu={handleLineContextMenu}
+            selectedEntryPreviewUrl={selectedEntryPreviewUrl}
+            commitPanel={commitPanel}
+          />
         </div>
       )}
 
