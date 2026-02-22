@@ -678,7 +678,7 @@ export const DiffViewer = ({
       ) : (
         <div className={`flex flex-1 min-h-0 ${resizing ? 'select-none' : ''}`}>
           <div
-            className={`${sidebarOpen ? '' : 'w-0 overflow-hidden'} ${resizing ? '' : 'transition-all duration-200'}`}
+            className={`h-full min-h-0 shrink-0 ${sidebarOpen ? '' : 'w-0 overflow-hidden'} ${resizing ? '' : 'transition-all duration-200'}`}
             style={sidebarOpen ? { width: sidebarWidth } : undefined}
           >
             <DiffViewerSidebar
