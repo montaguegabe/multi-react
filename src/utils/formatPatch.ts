@@ -41,49 +41,74 @@ export function formatPatch(
 
   let patch = '';
   let globalIndex = 0;
+  let cumulativeNewDelta = 0;
 
   for (const block of file.blocks) {
     let hunkBuf = '';
+    let hunkOldStart: number | null = null;
+    let hunkNewStart: number | null = null;
     let oldCount = 0;
     let newCount = 0;
     let anySelected = false;
+    let oldPos = block.oldStartLine ?? 1;
+    let newPos = (block.newStartLine ?? 1) + cumulativeNewDelta;
 
     for (const line of block.lines) {
       const selected = selection.isSelected(globalIndex);
       globalIndex++;
 
       if (line.type === LineType.CONTEXT) {
+        if (hunkOldStart === null || hunkNewStart === null) {
+          hunkOldStart = oldPos;
+          hunkNewStart = newPos;
+        }
         hunkBuf += ` ${lineText(line)}\n`;
         hunkBuf += noNewlineSuffix(line);
         oldCount++;
         newCount++;
-      } else if (selected) {
-        // Selected add or delete: include as-is
-        if (line.type === LineType.INSERT) {
+        oldPos++;
+        newPos++;
+      } else if (line.type === LineType.INSERT) {
+        if (selected) {
+          if (hunkOldStart === null || hunkNewStart === null) {
+            hunkOldStart = oldPos;
+            hunkNewStart = newPos;
+          }
           hunkBuf += `+${lineText(line)}\n`;
           hunkBuf += noNewlineSuffix(line);
           newCount++;
-        } else if (line.type === LineType.DELETE) {
+          newPos++;
+          anySelected = true;
+        } else {
+          // Unselected add: drop entirely (for both new files and modified files).
+          // This shifts later staged new-line coordinates backward.
+          cumulativeNewDelta -= 1;
+        }
+      } else if (line.type === LineType.DELETE) {
+        if (selected) {
+          if (hunkOldStart === null || hunkNewStart === null) {
+            hunkOldStart = oldPos;
+            hunkNewStart = newPos;
+          }
           hunkBuf += `-${lineText(line)}\n`;
           hunkBuf += noNewlineSuffix(line);
           oldCount++;
-        }
-        anySelected = true;
-      } else {
-        // Unselected line
-        if (line.type === LineType.INSERT) {
-          // Unselected add: drop entirely (for both new files and modified files)
-          continue;
-        } else if (line.type === LineType.DELETE) {
-          if (isNewFile) {
-            // New files shouldn't have deletes, but skip just in case
-            continue;
+          oldPos++;
+          anySelected = true;
+        } else if (!isNewFile) {
+          // Unselected delete: convert to context line to keep it in the index.
+          // This shifts later staged new-line coordinates forward.
+          if (hunkOldStart === null || hunkNewStart === null) {
+            hunkOldStart = oldPos;
+            hunkNewStart = newPos;
           }
-          // Unselected delete: convert to context line
           hunkBuf += ` ${lineText(line)}\n`;
           hunkBuf += noNewlineSuffix(line);
           oldCount++;
           newCount++;
+          oldPos++;
+          newPos++;
+          cumulativeNewDelta += 1;
         }
       }
     }
@@ -92,8 +117,8 @@ export function formatPatch(
       continue;
     }
 
-    const oldStart = block.oldStartLine || 1;
-    const newStart = block.newStartLine || 1;
+    const oldStart = hunkOldStart ?? (block.oldStartLine ?? 1);
+    const newStart = hunkNewStart ?? ((block.newStartLine ?? 1) + cumulativeNewDelta);
     const oldInfo =
       oldCount === 1 ? `${oldStart}` : `${oldStart},${oldCount}`;
     const newInfo =
@@ -181,7 +206,7 @@ export function formatDiscardPatch(
     }
 
     // Use newStartLine for the old side (matches working tree positions)
-    const wtStart = block.newStartLine || 1;
+    const wtStart = block.newStartLine ?? 1;
     const oldInfo =
       oldCount === 1 ? `${wtStart}` : `${wtStart},${oldCount}`;
     const newInfo =
