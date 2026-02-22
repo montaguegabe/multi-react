@@ -7,7 +7,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type RefCallback } from 'react';
-import type { DiffFile } from 'diff2html/lib/types';
+import type { DiffFile } from 'diff2html/lib/types.js';
 import type {
   ContextMenuAction,
   ContextMenuTarget,
@@ -127,6 +127,12 @@ export const DiffViewer = ({
 
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
+  const fileEntryButtonRefs = useRef<Record<string, HTMLButtonElement | null>>(
+    {},
+  );
+  const historyGroupButtonRefs = useRef<
+    Record<string, HTMLButtonElement | null>
+  >({});
   const [pendingDiscard, setPendingDiscard] = useState<DiscardTarget | null>(null);
 
   const SUPPRESS_KEY = 'multi-react:suppressDiscardConfirm';
@@ -328,6 +334,28 @@ export const DiffViewer = ({
       null,
     [combinedHistory, selectedHistoryGroupId],
   );
+
+  useEffect(() => {
+    if (!sidebarOpen || activeSidebarTab !== 'files' || !selectedKey) return;
+    fileEntryButtonRefs.current[selectedKey]?.scrollIntoView({
+      block: 'nearest',
+      inline: 'nearest',
+    });
+  }, [activeSidebarTab, selectedKey, sidebarOpen, entries]);
+
+  useEffect(() => {
+    if (
+      !sidebarOpen ||
+      activeSidebarTab !== 'history' ||
+      !selectedHistoryGroupId
+    ) {
+      return;
+    }
+    historyGroupButtonRefs.current[selectedHistoryGroupId]?.scrollIntoView({
+      block: 'nearest',
+      inline: 'nearest',
+    });
+  }, [activeSidebarTab, selectedHistoryGroupId, sidebarOpen, combinedHistory]);
 
   useEffect(() => {
     if (
@@ -856,6 +884,9 @@ export const DiffViewer = ({
                           return (
                             <button
                               key={entry.key}
+                              ref={(el) => {
+                                fileEntryButtonRefs.current[entry.key] = el;
+                              }}
                               onClick={() => {
                                 setSelectedKey(entry.key);
                                 if (mobile) setSidebarOpen(false);
@@ -920,6 +951,9 @@ export const DiffViewer = ({
                     return (
                       <button
                         key={group.id}
+                        ref={(el) => {
+                          historyGroupButtonRefs.current[group.id] = el;
+                        }}
                         onClick={() => {
                           setSelectedHistoryGroupId(group.id);
                           if (mobile) setSidebarOpen(false);

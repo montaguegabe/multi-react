@@ -1,5 +1,5 @@
 import { parse } from 'diff2html';
-import type { DiffFile } from 'diff2html/lib/types';
+import type { DiffFile } from 'diff2html/lib/types.js';
 
 /**
  * diff2html silently drops "\ No newline at end of file" markers.

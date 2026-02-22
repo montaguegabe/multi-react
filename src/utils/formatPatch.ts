@@ -1,5 +1,5 @@
-import type { DiffFile, DiffLine } from 'diff2html/lib/types';
-import { LineType } from 'diff2html/lib/types';
+import type { DiffFile, DiffLine } from 'diff2html/lib/types.js';
+import { LineType } from 'diff2html/lib/types.js';
 import { DiffSelection } from '../models/DiffSelection';
 
 /** Strip the leading +/-/space prefix that diff2html includes in line.content */

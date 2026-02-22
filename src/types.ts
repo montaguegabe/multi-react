@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { DiffFile } from 'diff2html/lib/types';
+import type { DiffFile } from 'diff2html/lib/types.js';
 import type { DiffSelection } from './models/DiffSelection';
 
 export interface Repository {

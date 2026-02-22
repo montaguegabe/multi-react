@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { DiffFile } from 'diff2html/lib/types';
+import type { DiffFile } from 'diff2html/lib/types.js';
 import type React from 'react';
-import { LineType } from 'diff2html/lib/types';
+import { LineType } from 'diff2html/lib/types.js';
 import type { DiffSelection } from '../models/DiffSelection';
 import { DiffSelectionType } from '../models/DiffSelection';
 import { DiffHunk } from './DiffHunk';

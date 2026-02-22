@@ -1,5 +1,5 @@
-import type { DiffBlock } from 'diff2html/lib/types';
-import { LineType } from 'diff2html/lib/types';
+import type { DiffBlock } from 'diff2html/lib/types.js';
+import { LineType } from 'diff2html/lib/types.js';
 import type { DiffSelection } from '../models/DiffSelection';
 import type { GroupInfo, LineGroupMeta } from './DiffRenderer';
 import { DiffLineRow } from './DiffLineRow';

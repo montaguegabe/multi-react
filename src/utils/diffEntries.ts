@@ -1,4 +1,4 @@
-import type { DiffFile } from 'diff2html/lib/types';
+import type { DiffFile } from 'diff2html/lib/types.js';
 import type { FileEntry, Repository } from '../types';
 import { parseDiff } from './parseDiff';
 
