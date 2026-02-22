@@ -1,7 +1,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { parseDiff } = require('../dist/index.js');
+const {
+  parseDiff,
+  formatPatch,
+  DiffSelection,
+  DiffSelectionType,
+} = require('../dist/index.js');
 
 test('preserves literal "\\ No newline at end of file" text inside changed lines', () => {
   const diff = [
@@ -55,4 +60,27 @@ test('annotates true no-newline markers on preceding parsed line', () => {
   assert.ok(ins, 'expected insert line');
   assert.equal(del.noNewlineAtEnd, true);
   assert.equal(ins.noNewlineAtEnd, undefined);
+});
+
+test('formatPatch emits /dev/null target path for deleted files', () => {
+  const diff = [
+    'diff --git a/old.txt b/old.txt',
+    'deleted file mode 100644',
+    'index ce01362..0000000',
+    '--- a/old.txt',
+    '+++ /dev/null',
+    '@@ -1 +0,0 @@',
+    '-hello',
+  ].join('\n');
+
+  const files = parseDiff(diff);
+  assert.equal(files.length, 1);
+
+  const selection = DiffSelection.fromInitialSelection(DiffSelectionType.All);
+  const patch = formatPatch(files[0], selection, false);
+  assert.ok(patch, 'expected a patch for deleted file selection');
+  assert.ok(
+    patch.startsWith('--- a/old.txt\n+++ /dev/null\n'),
+    `unexpected deleted-file patch header:\n${patch}`,
+  );
 });

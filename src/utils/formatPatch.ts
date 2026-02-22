@@ -33,8 +33,11 @@ export function formatPatch(
   const oldPath = file.oldName.replace(/^[ab]\//, '');
   const newPath = file.newName.replace(/^[ab]\//, '');
 
-  const fromPath = isNewFile ? '/dev/null' : `a/${oldPath}`;
-  const toPath = `b/${newPath}`;
+  const isNew = isNewFile || file.isNew === true || oldPath === '/dev/null';
+  const isDeleted = file.isDeleted === true || newPath === '/dev/null';
+
+  const fromPath = isNew ? '/dev/null' : `a/${oldPath}`;
+  const toPath = isDeleted ? '/dev/null' : `b/${newPath}`;
 
   let patch = '';
   let globalIndex = 0;
