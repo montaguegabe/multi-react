@@ -22,6 +22,8 @@ type DiffViewerContentProps = {
   activeSidebarTab: 'files' | 'history';
   historyLoading: boolean;
   selectedHistoryGroup: HistoryGroup | null;
+  selectedHistoryDiffRequested: boolean;
+  selectedHistoryDiffLoaded: boolean;
   historyDiffLoadingGroupId: string | null;
   selectedHistoryEntries: HistoryDiffEntry[];
   selectedHistoryEntriesByRepo: Map<string, HistoryRepoGroup>;
@@ -52,6 +54,8 @@ export function DiffViewerContent({
   activeSidebarTab,
   historyLoading,
   selectedHistoryGroup,
+  selectedHistoryDiffRequested,
+  selectedHistoryDiffLoaded,
   historyDiffLoadingGroupId,
   selectedHistoryEntries,
   selectedHistoryEntriesByRepo,
@@ -80,6 +84,14 @@ export function DiffViewerContent({
             historyDiffLoadingGroupId === selectedHistoryGroup.id ? (
               <div className="flex items-center justify-center h-full text-muted-foreground">
                 Loading grouped diff...
+              </div>
+            ) : selectedHistoryDiffRequested && !selectedHistoryDiffLoaded ? (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                Loading grouped diff...
+              </div>
+            ) : !selectedHistoryDiffRequested ? (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                Select a commit to load its grouped diff
               </div>
             ) : selectedHistoryEntries.length > 0 ? (
               <div className="divide-y divide-border">

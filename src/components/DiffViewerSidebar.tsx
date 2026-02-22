@@ -50,7 +50,7 @@ type DiffViewerSidebarProps = {
   historyLoading: boolean;
   combinedHistory: HistoryGroup[];
   selectedHistoryGroupId: string | null;
-  setSelectedHistoryGroupId: Dispatch<SetStateAction<string | null>>;
+  onHistoryGroupSelect: (groupId: string) => void;
   historyGroupButtonRefs: MutableRefObject<
     Record<string, HTMLButtonElement | null>
   >;
@@ -83,7 +83,7 @@ export function DiffViewerSidebar({
   historyLoading,
   combinedHistory,
   selectedHistoryGroupId,
-  setSelectedHistoryGroupId,
+  onHistoryGroupSelect,
   historyGroupButtonRefs,
   handleHistoryGroupContextMenu,
 }: DiffViewerSidebarProps) {
@@ -326,7 +326,7 @@ export function DiffViewerSidebar({
                     historyGroupButtonRefs.current[group.id] = el;
                   }}
                   onClick={() => {
-                    setSelectedHistoryGroupId(group.id);
+                    onHistoryGroupSelect(group.id);
                     if (mobile) setSidebarOpen(false);
                   }}
                   onContextMenu={(e) =>

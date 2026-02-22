@@ -59,6 +59,8 @@ export const DiffViewer = ({
   const [selectedHistoryGroupId, setSelectedHistoryGroupId] = useState<
     string | null
   >(null);
+  const [historyDiffRequestedGroupIds, setHistoryDiffRequestedGroupIds] =
+    useState<Record<string, true>>({});
   const [historyDiffByGroupId, setHistoryDiffByGroupId] = useState<
     Record<string, HistoryRepoDiff[]>
   >({});
@@ -214,26 +216,13 @@ export const DiffViewer = ({
 
   useEffect(() => {
     if (!hasHistoryTab) return;
-
-    if (activeSidebarTab === 'history' && combinedHistory.length === 0) {
-      setSelectedHistoryGroupId(null);
-      return;
-    }
-
     if (
-      activeSidebarTab === 'history' &&
-      combinedHistory.length > 0 &&
-      (!selectedHistoryGroupId ||
-        !combinedHistory.find((group) => group.id === selectedHistoryGroupId))
+      selectedHistoryGroupId &&
+      !combinedHistory.some((group) => group.id === selectedHistoryGroupId)
     ) {
-      setSelectedHistoryGroupId(combinedHistory[0].id);
+      setSelectedHistoryGroupId(null);
     }
-  }, [
-    activeSidebarTab,
-    combinedHistory,
-    hasHistoryTab,
-    selectedHistoryGroupId,
-  ]);
+  }, [combinedHistory, hasHistoryTab, selectedHistoryGroupId]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -259,25 +248,11 @@ export const DiffViewer = ({
         return;
       }
 
-      if (activeSidebarTab === 'history') {
-        if (combinedHistory.length === 0) return;
-        e.preventDefault();
-        (document.activeElement as HTMLElement)?.blur();
-        setSelectedHistoryGroupId((prev) => {
-          const idx = combinedHistory.findIndex((group) => group.id === prev);
-          if (idx < 0) return combinedHistory[0].id;
-          const next =
-            e.key === 'ArrowDown'
-              ? Math.min(idx + 1, combinedHistory.length - 1)
-              : Math.max(idx - 1, 0);
-          return combinedHistory[next].id;
-        });
-      }
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [activeSidebarTab, combinedHistory, entries]);
+  }, [activeSidebarTab, entries]);
 
   const selectedEntry = useMemo(
     () => entries.find((e) => e.key === selectedKey) ?? null,
@@ -294,6 +269,22 @@ export const DiffViewer = ({
       null,
     [combinedHistory, selectedHistoryGroupId],
   );
+  const selectedHistoryDiffRequested = selectedHistoryGroup
+    ? Boolean(historyDiffRequestedGroupIds[selectedHistoryGroup.id])
+    : false;
+  const selectedHistoryDiffLoaded = selectedHistoryGroup
+    ? Object.prototype.hasOwnProperty.call(
+        historyDiffByGroupId,
+        selectedHistoryGroup.id,
+      )
+    : false;
+
+  const handleHistoryGroupSelect = useCallback((groupId: string) => {
+    setSelectedHistoryGroupId(groupId);
+    setHistoryDiffRequestedGroupIds((previous) =>
+      previous[groupId] ? previous : { ...previous, [groupId]: true },
+    );
+  }, []);
 
   useEffect(() => {
     if (!sidebarOpen || activeSidebarTab !== 'files' || !selectedKey) return;
@@ -321,7 +312,8 @@ export const DiffViewer = ({
     if (
       !loadHistoryGroupDiff ||
       activeSidebarTab !== 'history' ||
-      !selectedHistoryGroup
+      !selectedHistoryGroup ||
+      !historyDiffRequestedGroupIds[selectedHistoryGroup.id]
     ) {
       return;
     }
@@ -365,6 +357,7 @@ export const DiffViewer = ({
     };
   }, [
     activeSidebarTab,
+    historyDiffRequestedGroupIds,
     historyDiffByGroupId,
     loadHistoryGroupDiff,
     selectedHistoryGroup,
@@ -711,7 +704,7 @@ export const DiffViewer = ({
               historyLoading={historyLoading}
               combinedHistory={combinedHistory}
               selectedHistoryGroupId={selectedHistoryGroupId}
-              setSelectedHistoryGroupId={setSelectedHistoryGroupId}
+              onHistoryGroupSelect={handleHistoryGroupSelect}
               historyGroupButtonRefs={historyGroupButtonRefs}
               handleHistoryGroupContextMenu={handleHistoryGroupContextMenu}
             />
@@ -729,6 +722,8 @@ export const DiffViewer = ({
             activeSidebarTab={activeSidebarTab}
             historyLoading={historyLoading}
             selectedHistoryGroup={selectedHistoryGroup}
+            selectedHistoryDiffRequested={selectedHistoryDiffRequested}
+            selectedHistoryDiffLoaded={selectedHistoryDiffLoaded}
             historyDiffLoadingGroupId={historyDiffLoadingGroupId}
             selectedHistoryEntries={selectedHistoryEntries}
             selectedHistoryEntriesByRepo={selectedHistoryEntriesByRepo}
