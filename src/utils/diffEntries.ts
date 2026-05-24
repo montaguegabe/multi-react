@@ -1,11 +1,15 @@
 import type { DiffFile } from 'diff2html/lib/types.js';
-import type { FileEntry, Repository } from '../types';
+import type { FileEntry, HistoryRepoDiff, Repository } from '../types';
 import { parseDiff } from './parseDiff';
+
+export function normalizeDiffPath(path: string): string {
+  return path.replace(/^[ab]\//, '');
+}
 
 export function getDisplayPath(file: DiffFile): string {
   return file.isDeleted
-    ? file.oldName.replace(/^[ab]\//, '')
-    : file.newName.replace(/^[ab]\//, '');
+    ? normalizeDiffPath(file.oldName)
+    : normalizeDiffPath(file.newName);
 }
 
 export function getFileStatus(file: DiffFile): FileEntry['status'] {
@@ -27,16 +31,12 @@ export function buildRepoFileEntries(
     if (repo.diff.trim()) {
       const files = parseDiff(repo.diff);
       for (const file of files) {
-        const displayPath = getDisplayPath(file);
-        const key = `${repo.name}::${displayPath}`;
-        const entry: FileEntry = {
+        const entry = buildFileEntry({
           repoName: repo.name,
           repoPath: repo.path,
           file,
-          displayPath,
-          status: getFileStatus(file),
-          key,
-        };
+          keyPrefix: repo.name,
+        });
         entries.push(entry);
         repoEntries.push(entry);
       }
@@ -46,4 +46,46 @@ export function buildRepoFileEntries(
   }
 
   return { entries, byRepo };
+}
+
+export function buildHistoryFileEntries(
+  groupId: string,
+  repoDiffs: HistoryRepoDiff[],
+): FileEntry[] {
+  return repoDiffs.flatMap((repoDiff) => {
+    if (!repoDiff.diff.trim()) return [];
+    return parseDiff(repoDiff.diff).map((file, index) =>
+      buildFileEntry({
+        repoName: repoDiff.repoName,
+        repoPath: repoDiff.repoPath,
+        file,
+        keyPrefix: `history::${groupId}::${repoDiff.repoName}`,
+        keySuffix: String(index),
+      }),
+    );
+  });
+}
+
+function buildFileEntry({
+  repoName,
+  repoPath,
+  file,
+  keyPrefix,
+  keySuffix,
+}: {
+  repoName: string;
+  repoPath: string;
+  file: DiffFile;
+  keyPrefix: string;
+  keySuffix?: string;
+}): FileEntry {
+  const displayPath = getDisplayPath(file);
+  return {
+    repoName,
+    repoPath,
+    file,
+    displayPath,
+    status: getFileStatus(file),
+    key: [keyPrefix, displayPath, keySuffix].filter(Boolean).join('::'),
+  };
 }

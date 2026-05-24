@@ -1,5 +1,6 @@
 import type { DiffFile } from 'diff2html/lib/types.js';
 import type { FileEntry } from '../types';
+import { normalizeDiffPath } from '../utils/diffEntries';
 
 export function statusLabel(s: FileEntry['status']): string {
   switch (s) {
@@ -49,7 +50,7 @@ export function getCurrentFilePreviewUrl(
 ): string | undefined {
   if (!entry || entry.file.isDeleted) return undefined;
 
-  const nextPath = entry.file.newName.replace(/^[ab]\//, '');
+  const nextPath = normalizeDiffPath(entry.file.newName);
   const relPath =
     nextPath && nextPath !== '/dev/null' ? nextPath : entry.displayPath;
   if (!relPath) return undefined;

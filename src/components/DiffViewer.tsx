@@ -16,11 +16,9 @@ import type {
 import type { GroupInfo } from './DiffRenderer';
 import { DiffSelectionType } from '../models/DiffSelection';
 import { ConfirmDialog } from './ConfirmDialog';
-import { parseDiff } from '../utils/parseDiff';
 import {
+  buildHistoryFileEntries,
   buildRepoFileEntries,
-  getDisplayPath,
-  getFileStatus,
 } from '../utils/diffEntries';
 import { DiffViewerContent } from './DiffViewerContent';
 import { DiffViewerSidebar } from './DiffViewerSidebar';
@@ -370,21 +368,10 @@ export const DiffViewer = ({
   const selectedHistoryEntries = useMemo<HistoryDiffEntry[]>(() => {
     if (!selectedHistoryGroup || !selectedHistoryRepoDiffs) return [];
 
-    return selectedHistoryRepoDiffs.flatMap((repoDiff) => {
-      if (!repoDiff.diff.trim()) return [];
-      return parseDiff(repoDiff.diff).map((file, index) => {
-        const displayPath = getDisplayPath(file);
-
-        return {
-          key: `history::${selectedHistoryGroup.id}::${repoDiff.repoName}::${displayPath}::${index}`,
-          repoName: repoDiff.repoName,
-          repoPath: repoDiff.repoPath,
-          displayPath,
-          status: getFileStatus(file),
-          file,
-        };
-      });
-    });
+    return buildHistoryFileEntries(
+      selectedHistoryGroup.id,
+      selectedHistoryRepoDiffs,
+    );
   }, [selectedHistoryRepoDiffs, selectedHistoryGroup]);
 
   const selectedHistoryEntriesByRepo = useMemo(() => {

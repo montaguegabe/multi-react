@@ -1,6 +1,7 @@
 import type { DiffFile, DiffLine } from 'diff2html/lib/types.js';
 import { LineType } from 'diff2html/lib/types.js';
 import { DiffSelection } from '../models/DiffSelection';
+import { normalizeDiffPath } from './diffEntries';
 
 /** Strip the leading +/-/space prefix that diff2html includes in line.content */
 function lineText(line: DiffLine): string {
@@ -30,8 +31,8 @@ export function formatPatch(
   selection: DiffSelection,
   isNewFile: boolean,
 ): string | null {
-  const oldPath = file.oldName.replace(/^[ab]\//, '');
-  const newPath = file.newName.replace(/^[ab]\//, '');
+  const oldPath = normalizeDiffPath(file.oldName);
+  const newPath = normalizeDiffPath(file.newName);
 
   const isNew = isNewFile || file.isNew === true || oldPath === '/dev/null';
   const isDeleted = file.isDeleted === true || newPath === '/dev/null';
@@ -149,8 +150,8 @@ export function formatDiscardPatch(
   file: DiffFile,
   selection: DiffSelection,
 ): string | null {
-  const oldPath = file.oldName.replace(/^[ab]\//, '');
-  const newPath = file.newName.replace(/^[ab]\//, '');
+  const oldPath = normalizeDiffPath(file.oldName);
+  const newPath = normalizeDiffPath(file.newName);
 
   const aPath = file.isNew ? '/dev/null' : `a/${newPath}`;
   const bPath = file.isNew ? '/dev/null' : `b/${oldPath}`;
