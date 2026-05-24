@@ -1,9 +1,3 @@
-import {
-  ArrowLeft,
-  PanelLeftClose,
-  PanelLeftOpen,
-  RefreshCw,
-} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   ContextMenuTarget,
@@ -11,21 +5,20 @@ import type {
   DiscardTarget,
   DiffViewerProps,
   FileEntry,
-  HistoryRepoDiff,
 } from '../types';
 import type { GroupInfo } from './DiffRenderer';
 import { DiffSelectionType } from '../models/DiffSelection';
 import { ConfirmDialog } from './ConfirmDialog';
-import {
-  buildHistoryFileEntries,
-  buildRepoFileEntries,
-} from '../utils/diffEntries';
+import { buildRepoFileEntries } from '../utils/diffEntries';
 import { DiffViewerContent } from './DiffViewerContent';
-import { DiffViewerSidebar } from './DiffViewerSidebar';
 import {
-  getCurrentFilePreviewUrl,
-  type HistoryDiffEntry,
-} from './DiffViewer.shared';
+  DiffViewerContextMenu,
+  type ContextMenuState,
+} from './DiffViewerContextMenu';
+import { DiffViewerHeader } from './DiffViewerHeader';
+import { DiffViewerSidebar } from './DiffViewerSidebar';
+import { getCurrentFilePreviewUrl } from './DiffViewer.shared';
+import { useDiffViewerHistory } from './useDiffViewerHistory';
 
 export const DiffViewer = ({
   repositories,
@@ -57,38 +50,17 @@ export const DiffViewer = ({
   const [selectedHistoryGroupId, setSelectedHistoryGroupId] = useState<
     string | null
   >(null);
-  const [historyDiffRequestedGroupIds, setHistoryDiffRequestedGroupIds] =
-    useState<Record<string, true>>({});
-  const [historyDiffByGroupId, setHistoryDiffByGroupId] = useState<
-    Record<string, HistoryRepoDiff[]>
-  >({});
-  const [historyDiffLoadingGroupId, setHistoryDiffLoadingGroupId] = useState<
-    string | null
-  >(null);
-  const [collapsedHistoryRepos, setCollapsedHistoryRepos] = useState<
-    Record<string, boolean>
-  >({});
-  const [collapsedHistoryFiles, setCollapsedHistoryFiles] = useState<
-    Record<string, boolean>
-  >({});
   const [collapsedRepos, setCollapsedRepos] = useState<
     Record<string, boolean>
   >({});
   const [sidebarOpen, setSidebarOpen] = useState(!mobile);
   const [sidebarWidth, setSidebarWidth] = useState(288); // 18rem = 288px
   const [resizing, setResizing] = useState(false);
-  type ContextMenuState =
-    | { type: 'file'; x: number; y: number; target: ContextMenuTarget; fileEntry?: FileEntry }
-    | { type: 'line'; x: number; y: number; fileEntry: FileEntry; lineIndex: number; groupInfo?: GroupInfo; groupOnly?: boolean };
 
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
-  const contextMenuRef = useRef<HTMLDivElement>(null);
   const fileEntryButtonRefs = useRef<Record<string, HTMLButtonElement | null>>(
     {},
   );
-  const historyGroupButtonRefs = useRef<
-    Record<string, HTMLButtonElement | null>
-  >({});
   const [pendingDiscard, setPendingDiscard] = useState<DiscardTarget | null>(null);
 
   const SUPPRESS_KEY = 'multi-react:suppressDiscardConfirm';
@@ -184,20 +156,6 @@ export const DiffViewer = ({
     };
   }, [resizing]);
 
-  useEffect(() => {
-    if (!contextMenu) return;
-    const handleClick = (e: MouseEvent) => {
-      if (
-        contextMenuRef.current &&
-        !contextMenuRef.current.contains(e.target as Node)
-      ) {
-        setContextMenu(null);
-      }
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [contextMenu]);
-
   const { entries, byRepo } = useMemo(
     () => buildRepoFileEntries(repositories),
     [repositories],
@@ -211,16 +169,6 @@ export const DiffViewer = ({
       setSelectedKey(entries[0].key);
     }
   }, [entries, selectedKey]);
-
-  useEffect(() => {
-    if (!hasHistoryTab) return;
-    if (
-      selectedHistoryGroupId &&
-      !combinedHistory.some((group) => group.id === selectedHistoryGroupId)
-    ) {
-      setSelectedHistoryGroupId(null);
-    }
-  }, [combinedHistory, hasHistoryTab, selectedHistoryGroupId]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -261,28 +209,15 @@ export const DiffViewer = ({
     [selectedEntry],
   );
 
-  const selectedHistoryGroup = useMemo(
-    () =>
-      combinedHistory.find((group) => group.id === selectedHistoryGroupId) ??
-      null,
-    [combinedHistory, selectedHistoryGroupId],
-  );
-  const selectedHistoryDiffRequested = selectedHistoryGroup
-    ? Boolean(historyDiffRequestedGroupIds[selectedHistoryGroup.id])
-    : false;
-  const selectedHistoryDiffLoaded = selectedHistoryGroup
-    ? Object.prototype.hasOwnProperty.call(
-        historyDiffByGroupId,
-        selectedHistoryGroup.id,
-      )
-    : false;
-
-  const handleHistoryGroupSelect = useCallback((groupId: string) => {
-    setSelectedHistoryGroupId(groupId);
-    setHistoryDiffRequestedGroupIds((previous) =>
-      previous[groupId] ? previous : { ...previous, [groupId]: true },
-    );
-  }, []);
+  const history = useDiffViewerHistory({
+    activeSidebarTab,
+    combinedHistory,
+    hasHistoryTab,
+    loadHistoryGroupDiff,
+    selectedHistoryGroupId,
+    setSelectedHistoryGroupId,
+    sidebarOpen,
+  });
 
   useEffect(() => {
     if (!sidebarOpen || activeSidebarTab !== 'files' || !selectedKey) return;
@@ -291,134 +226,6 @@ export const DiffViewer = ({
       inline: 'nearest',
     });
   }, [activeSidebarTab, selectedKey, sidebarOpen, entries]);
-
-  useEffect(() => {
-    if (
-      !sidebarOpen ||
-      activeSidebarTab !== 'history' ||
-      !selectedHistoryGroupId
-    ) {
-      return;
-    }
-    historyGroupButtonRefs.current[selectedHistoryGroupId]?.scrollIntoView({
-      block: 'nearest',
-      inline: 'nearest',
-    });
-  }, [activeSidebarTab, selectedHistoryGroupId, sidebarOpen, combinedHistory]);
-
-  useEffect(() => {
-    if (
-      !loadHistoryGroupDiff ||
-      activeSidebarTab !== 'history' ||
-      !selectedHistoryGroup ||
-      !historyDiffRequestedGroupIds[selectedHistoryGroup.id]
-    ) {
-      return;
-    }
-
-    if (
-      Object.prototype.hasOwnProperty.call(
-        historyDiffByGroupId,
-        selectedHistoryGroup.id,
-      )
-    ) {
-      return;
-    }
-
-    let cancelled = false;
-    setHistoryDiffLoadingGroupId(selectedHistoryGroup.id);
-
-    void loadHistoryGroupDiff(selectedHistoryGroup)
-      .then((diff) => {
-        if (cancelled) return;
-        setHistoryDiffByGroupId((previous) => ({
-          ...previous,
-          [selectedHistoryGroup.id]: diff,
-        }));
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setHistoryDiffByGroupId((previous) => ({
-          ...previous,
-          [selectedHistoryGroup.id]: [],
-        }));
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setHistoryDiffLoadingGroupId((current) =>
-          current === selectedHistoryGroup.id ? null : current,
-        );
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    activeSidebarTab,
-    historyDiffRequestedGroupIds,
-    historyDiffByGroupId,
-    loadHistoryGroupDiff,
-    selectedHistoryGroup,
-  ]);
-
-  const selectedHistoryRepoDiffs = selectedHistoryGroup
-    ? historyDiffByGroupId[selectedHistoryGroup.id]
-    : undefined;
-
-  const selectedHistoryEntries = useMemo<HistoryDiffEntry[]>(() => {
-    if (!selectedHistoryGroup || !selectedHistoryRepoDiffs) return [];
-
-    return buildHistoryFileEntries(
-      selectedHistoryGroup.id,
-      selectedHistoryRepoDiffs,
-    );
-  }, [selectedHistoryRepoDiffs, selectedHistoryGroup]);
-
-  const selectedHistoryEntriesByRepo = useMemo(() => {
-    const grouped = new Map<
-      string,
-      { repoName: string; repoPath: string; entries: HistoryDiffEntry[] }
-    >();
-    for (const entry of selectedHistoryEntries) {
-      const repoGroup = grouped.get(entry.repoPath);
-      if (repoGroup) {
-        repoGroup.entries.push(entry);
-      } else {
-        grouped.set(entry.repoPath, {
-          repoName: entry.repoName,
-          repoPath: entry.repoPath,
-          entries: [entry],
-        });
-      }
-    }
-    return grouped;
-  }, [selectedHistoryEntries]);
-
-  useEffect(() => {
-    if (!selectedHistoryGroup) return;
-
-    setCollapsedHistoryRepos((previous) => {
-      const next = { ...previous };
-      for (const repoPath of selectedHistoryEntriesByRepo.keys()) {
-        const key = `${selectedHistoryGroup.id}::${repoPath}`;
-        if (!(key in next)) {
-          next[key] = false;
-        }
-      }
-      return next;
-    });
-
-    setCollapsedHistoryFiles((previous) => {
-      const next = { ...previous };
-      for (const entry of selectedHistoryEntries) {
-        const key = `${selectedHistoryGroup.id}::${entry.key}`;
-        if (!(key in next)) {
-          next[key] = false;
-        }
-      }
-      return next;
-    });
-  }, [selectedHistoryEntries, selectedHistoryEntriesByRepo, selectedHistoryGroup]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -595,68 +402,19 @@ export const DiffViewer = ({
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
-        <div className="flex items-center gap-3">
-          {mobile && (
-            <button
-              onClick={() => setSidebarOpen((prev) => !prev)}
-              className="p-1.5 hover:bg-accent rounded-lg transition-colors"
-            >
-              {sidebarOpen ? (
-                <PanelLeftClose className="h-4 w-4" />
-              ) : (
-                <PanelLeftOpen className="h-4 w-4" />
-              )}
-            </button>
-          )}
-          {onBack && !mobile && (
-            <button
-              onClick={onBack}
-              title="Back (Esc)"
-              aria-label="Go back (Esc)"
-              className="p-1.5 hover:bg-accent rounded-lg transition-colors"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </button>
-          )}
-          <div>
-            <h1 className="text-xl font-semibold">{title}</h1>
-            {repoNames.length > 1 && (
-              <p className="text-xs text-muted-foreground">
-                {repoNames.length} repos
-              </p>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {onPushAll && (
-            <button
-              onClick={onPushAll}
-              disabled={pushingAll}
-              className="px-3 py-1.5 text-sm rounded-lg border border-border hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {pushingAll
-                ? showPushIndicator
-                  ? 'Pushing...'
-                  : 'Syncing...'
-                : showPushIndicator
-                  ? '↑ Push'
-                  : 'Sync All'}
-            </button>
-          )}
-          {onRefresh && (
-            <button
-              onClick={onRefresh}
-              className="p-2 hover:bg-accent rounded-lg transition-colors"
-            >
-              <RefreshCw
-                className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`}
-              />
-            </button>
-          )}
-        </div>
-      </div>
+      <DiffViewerHeader
+        title={title}
+        mobile={mobile}
+        sidebarOpen={sidebarOpen}
+        loading={loading}
+        repoCount={repoNames.length}
+        pushingAll={pushingAll}
+        showPushIndicator={showPushIndicator}
+        onBack={onBack}
+        onRefresh={onRefresh}
+        onPushAll={onPushAll}
+        onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
+      />
 
       {shouldShowEmptyState ? (
         <div className="flex-1 flex items-center justify-center text-muted-foreground">
@@ -691,8 +449,8 @@ export const DiffViewer = ({
               historyLoading={historyLoading}
               combinedHistory={combinedHistory}
               selectedHistoryGroupId={selectedHistoryGroupId}
-              onHistoryGroupSelect={handleHistoryGroupSelect}
-              historyGroupButtonRefs={historyGroupButtonRefs}
+              onHistoryGroupSelect={history.handleHistoryGroupSelect}
+              historyGroupButtonRefs={history.historyGroupButtonRefs}
               handleHistoryGroupContextMenu={handleHistoryGroupContextMenu}
             />
           </div>
@@ -708,16 +466,16 @@ export const DiffViewer = ({
           <DiffViewerContent
             activeSidebarTab={activeSidebarTab}
             historyLoading={historyLoading}
-            selectedHistoryGroup={selectedHistoryGroup}
-            selectedHistoryDiffRequested={selectedHistoryDiffRequested}
-            selectedHistoryDiffLoaded={selectedHistoryDiffLoaded}
-            historyDiffLoadingGroupId={historyDiffLoadingGroupId}
-            selectedHistoryEntries={selectedHistoryEntries}
-            selectedHistoryEntriesByRepo={selectedHistoryEntriesByRepo}
-            collapsedHistoryRepos={collapsedHistoryRepos}
-            setCollapsedHistoryRepos={setCollapsedHistoryRepos}
-            collapsedHistoryFiles={collapsedHistoryFiles}
-            setCollapsedHistoryFiles={setCollapsedHistoryFiles}
+            selectedHistoryGroup={history.selectedHistoryGroup}
+            selectedHistoryDiffRequested={history.selectedHistoryDiffRequested}
+            selectedHistoryDiffLoaded={history.selectedHistoryDiffLoaded}
+            historyDiffLoadingGroupId={history.historyDiffLoadingGroupId}
+            selectedHistoryEntries={history.selectedHistoryEntries}
+            selectedHistoryEntriesByRepo={history.selectedHistoryEntriesByRepo}
+            collapsedHistoryRepos={history.collapsedHistoryRepos}
+            setCollapsedHistoryRepos={history.setCollapsedHistoryRepos}
+            collapsedHistoryFiles={history.collapsedHistoryFiles}
+            setCollapsedHistoryFiles={history.setCollapsedHistoryFiles}
             handleContextMenu={handleContextMenu}
             selectedEntry={selectedEntry}
             selections={selections}
@@ -730,76 +488,13 @@ export const DiffViewer = ({
         </div>
       )}
 
-      {/* Context menu */}
-      {contextMenu && (
-        <div
-          ref={contextMenuRef}
-          className="fixed z-50 min-w-[160px] rounded-md border border-border bg-background py-1 shadow-md"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
-        >
-          {contextMenu.type === 'file' && (
-            <>
-              {fileContextActions?.map((action) => (
-                <button
-                  key={action.label}
-                  onClick={() => {
-                    action.onClick(contextMenu.target);
-                    setContextMenu(null);
-                  }}
-                  className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent transition-colors"
-                >
-                  {action.label}
-                </button>
-              ))}
-              {onDiscard && contextMenu.fileEntry && (
-                <button
-                  onClick={() =>
-                    requestDiscard({ type: 'file', fileEntry: contextMenu.fileEntry! })
-                  }
-                  className="w-full text-left px-3 py-1.5 text-sm text-red-500 hover:bg-accent transition-colors"
-                >
-                  Discard File Changes
-                </button>
-              )}
-            </>
-          )}
-          {contextMenu.type === 'line' && (
-            <>
-              {(!contextMenu.groupOnly || !contextMenu.groupInfo || contextMenu.groupInfo.lineCount <= 1) && (
-                <button
-                  onClick={() =>
-                    requestDiscard({
-                      type: 'lines',
-                      fileEntry: contextMenu.fileEntry,
-                      lineIndices: [contextMenu.lineIndex],
-                    })
-                  }
-                  className="w-full text-left px-3 py-1.5 text-sm text-red-500 hover:bg-accent transition-colors"
-                >
-                  Discard Line
-                </button>
-              )}
-              {contextMenu.groupInfo && contextMenu.groupInfo.lineCount > 1 && (
-                <button
-                  onClick={() => {
-                    const g = contextMenu.groupInfo!;
-                    const indices: number[] = [];
-                    for (let i = g.startIndex; i <= g.endIndex; i++) indices.push(i);
-                    requestDiscard({
-                      type: 'lines',
-                      fileEntry: contextMenu.fileEntry,
-                      lineIndices: indices,
-                    });
-                  }}
-                  className="w-full text-left px-3 py-1.5 text-sm text-red-500 hover:bg-accent transition-colors"
-                >
-                  Discard Group ({contextMenu.groupInfo.lineCount} lines)
-                </button>
-              )}
-            </>
-          )}
-        </div>
-      )}
+      <DiffViewerContextMenu
+        contextMenu={contextMenu}
+        fileContextActions={fileContextActions}
+        onDiscard={onDiscard}
+        requestDiscard={requestDiscard}
+        onClose={() => setContextMenu(null)}
+      />
 
       {/* Discard confirmation dialog */}
       <ConfirmDialog
