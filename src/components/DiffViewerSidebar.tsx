@@ -88,7 +88,7 @@ export function DiffViewerSidebar({
   handleHistoryGroupContextMenu,
 }: DiffViewerSidebarProps) {
   return (
-    <div className="h-full min-h-0 shrink-0 border-r border-border overflow-y-auto bg-muted/30">
+    <div className="h-full min-h-0 shrink-0 overflow-y-auto border-r border-border bg-muted/30 overscroll-contain [-webkit-overflow-scrolling:touch]">
       {hasHistoryTab && (
         <div className="flex border-b border-border shrink-0">
           <button

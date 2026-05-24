@@ -607,7 +607,7 @@ export const DiffViewer = ({
   }, [entries, selections, onSelectionChange]);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
         <div className="flex items-center gap-3">
@@ -676,9 +676,9 @@ export const DiffViewer = ({
           No changes
         </div>
       ) : (
-        <div className={`flex flex-1 min-h-0 ${resizing ? 'select-none' : ''}`}>
+        <div className={`flex flex-1 min-h-0 overflow-hidden ${resizing ? 'select-none' : ''}`}>
           <div
-            className={`h-full min-h-0 shrink-0 ${sidebarOpen ? '' : 'w-0 overflow-hidden'} ${resizing ? '' : 'transition-all duration-200'}`}
+            className={`min-h-0 ${sidebarOpen ? '' : 'w-0 overflow-hidden'} ${resizing ? '' : 'transition-all duration-200'}`}
             style={sidebarOpen ? { width: sidebarWidth } : undefined}
           >
             <DiffViewerSidebar
