@@ -1,18 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   ContextMenuTarget,
-  NativeContextMenuItem,
   DiscardTarget,
   DiffViewerProps,
   FileEntry,
 } from '../types';
 import type { GroupInfo } from './DiffRenderer';
-import { DiffSelectionType } from '../models/DiffSelection';
+import { summarizeSelections } from '../models/DiffSelection';
 import { ConfirmDialog } from './ConfirmDialog';
 import { buildRepoFileEntries } from '../utils/diffEntries';
 import { DiffViewerContent } from './DiffViewerContent';
 import {
+  buildFileContextMenuItems,
+  buildLineContextMenuItems,
   DiffViewerContextMenu,
+  findContextMenuAction,
+  toNativeContextMenuItems,
+  type ContextMenuItemModel,
   type ContextMenuState,
 } from './DiffViewerContextMenu';
 import { DiffViewerHeader } from './DiffViewerHeader';
@@ -84,62 +88,41 @@ export const DiffViewer = ({
     [onDiscard],
   );
 
-  const showNativeFileContextMenu = useCallback(
-    async (target: ContextMenuTarget, fileEntry?: FileEntry) => {
-      if (!showNativeContextMenu) return;
+  const openContextMenu = useCallback(
+    (e: React.MouseEvent, items: ContextMenuItemModel[]) => {
+      if (!items.some((item) => item.type === 'action')) return;
+      e.preventDefault();
 
-      const items: NativeContextMenuItem[] = [];
-      fileContextActions?.forEach((action, index) => {
-        items.push({
-          id: `file-action-${index}`,
-          label: action.label,
-          type: 'normal',
-        });
-      });
-
-      if (onDiscard && fileEntry) {
-        if (items.length > 0) {
-          items.push({ type: 'separator' });
-        }
-        items.push({
-          id: 'discard-file',
-          label: 'Discard File Changes',
-          type: 'normal',
-        });
-      }
-
-      if (items.length === 0) return;
-
-      const selectedId = await showNativeContextMenu(items);
-      if (!selectedId) return;
-
-      if (selectedId === 'discard-file' && onDiscard && fileEntry) {
-        requestDiscard({ type: 'file', fileEntry });
+      if (showNativeContextMenu) {
+        void (async () => {
+          const selectedId = await showNativeContextMenu(
+            toNativeContextMenuItems(items),
+          );
+          if (!selectedId) return;
+          findContextMenuAction(items, selectedId)?.();
+        })();
         return;
       }
 
-      if (!selectedId.startsWith('file-action-')) return;
-      const actionIndex = Number(selectedId.slice('file-action-'.length));
-      const action = fileContextActions?.[actionIndex];
-      if (!action) return;
-      action.onClick(target);
+      setContextMenu({ x: e.clientX, y: e.clientY, items });
     },
-    [fileContextActions, onDiscard, requestDiscard, showNativeContextMenu],
+    [showNativeContextMenu],
   );
 
   const handleContextMenu = useCallback(
     (e: React.MouseEvent, target: ContextMenuTarget, fileEntry?: FileEntry) => {
-      if (!fileContextActions?.length && !onDiscard) return;
-      e.preventDefault();
-
-      if (showNativeContextMenu) {
-        void showNativeFileContextMenu(target, fileEntry);
-        return;
-      }
-
-      setContextMenu({ type: 'file', x: e.clientX, y: e.clientY, target, fileEntry });
+      openContextMenu(
+        e,
+        buildFileContextMenuItems({
+          target,
+          fileEntry,
+          fileContextActions,
+          canDiscard: !!onDiscard,
+          requestDiscard,
+        }),
+      );
     },
-    [fileContextActions, onDiscard, showNativeContextMenu, showNativeFileContextMenu],
+    [fileContextActions, onDiscard, openContextMenu, requestDiscard],
   );
 
   useEffect(() => {
@@ -273,72 +256,21 @@ export const DiffViewer = ({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [hasHistoryTab, onBack, onOpenRepoInGitHubWeb, repositories, selectedEntry]);
 
-  const showNativeLineContextMenu = useCallback(
-    async (lineIndex: number, groupInfo?: GroupInfo, groupOnly?: boolean) => {
-      if (!showNativeContextMenu || !onDiscard || !selectedEntry) return;
-
-      const canDiscardSingle =
-        !groupOnly || !groupInfo || groupInfo.lineCount <= 1;
-      const items: NativeContextMenuItem[] = [];
-
-      if (canDiscardSingle) {
-        items.push({
-          id: 'discard-line',
-          label: 'Discard Line',
-          type: 'normal',
-        });
-      }
-
-      if (groupInfo && groupInfo.lineCount > 1) {
-        items.push({
-          id: 'discard-group',
-          label: `Discard Group (${groupInfo.lineCount} lines)`,
-          type: 'normal',
-        });
-      }
-
-      if (items.length === 0) return;
-
-      const selectedId = await showNativeContextMenu(items);
-      if (!selectedId) return;
-
-      if (selectedId === 'discard-line') {
-        requestDiscard({
-          type: 'lines',
-          fileEntry: selectedEntry,
-          lineIndices: [lineIndex],
-        });
-        return;
-      }
-
-      if (selectedId === 'discard-group' && groupInfo) {
-        const indices: number[] = [];
-        for (let i = groupInfo.startIndex; i <= groupInfo.endIndex; i += 1) {
-          indices.push(i);
-        }
-        requestDiscard({
-          type: 'lines',
-          fileEntry: selectedEntry,
-          lineIndices: indices,
-        });
-      }
-    },
-    [onDiscard, requestDiscard, selectedEntry, showNativeContextMenu],
-  );
-
   const handleLineContextMenu = useCallback(
     (e: React.MouseEvent, lineIndex: number, groupInfo?: GroupInfo, groupOnly?: boolean) => {
       if (!onDiscard || !selectedEntry) return;
-      e.preventDefault();
-
-      if (showNativeContextMenu) {
-        void showNativeLineContextMenu(lineIndex, groupInfo, groupOnly);
-        return;
-      }
-
-      setContextMenu({ type: 'line', x: e.clientX, y: e.clientY, fileEntry: selectedEntry, lineIndex, groupInfo, groupOnly });
+      openContextMenu(
+        e,
+        buildLineContextMenuItems({
+          fileEntry: selectedEntry,
+          lineIndex,
+          groupInfo,
+          groupOnly,
+          requestDiscard,
+        }),
+      );
     },
-    [onDiscard, selectedEntry, showNativeContextMenu, showNativeLineContextMenu],
+    [onDiscard, openContextMenu, requestDiscard, selectedEntry],
   );
 
   const handleHistoryGroupContextMenu = useCallback(
@@ -387,17 +319,7 @@ export const DiffViewer = ({
     !hasHistoryTab;
   const globalSelectionState = useMemo(() => {
     if (!selections || !onSelectionChange || entries.length === 0) return null;
-
-    const types = entries.map(
-      (entry) =>
-        selections[entry.key]?.getSelectionType() ?? DiffSelectionType.All,
-    );
-    const allAll = types.every((t) => t === DiffSelectionType.All);
-    const allNone = types.every((t) => t === DiffSelectionType.None);
-    return {
-      checked: allAll,
-      indeterminate: !allAll && !allNone,
-    };
+    return summarizeSelections(entries, selections);
   }, [entries, selections, onSelectionChange]);
 
   return (
@@ -490,9 +412,6 @@ export const DiffViewer = ({
 
       <DiffViewerContextMenu
         contextMenu={contextMenu}
-        fileContextActions={fileContextActions}
-        onDiscard={onDiscard}
-        requestDiscard={requestDiscard}
         onClose={() => setContextMenu(null)}
       />
 

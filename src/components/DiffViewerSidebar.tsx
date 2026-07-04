@@ -1,13 +1,8 @@
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import type React from 'react';
-import type {
-  Dispatch,
-  MutableRefObject,
-  RefCallback,
-  SetStateAction,
-} from 'react';
-import { DiffSelectionType } from '../models/DiffSelection';
-import type { DiffSelection } from '../models/DiffSelection';
+import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
+import { summarizeSelections } from '../models/DiffSelection';
+import type { DiffSelection, SelectionSummary } from '../models/DiffSelection';
 import type { ContextMenuTarget, FileEntry, HistoryGroup } from '../types';
 import { cn } from '../utils/cn';
 import {
@@ -15,11 +10,7 @@ import {
   statusColor,
   statusLabel,
 } from './DiffViewer.shared';
-
-type GlobalSelectionState = {
-  checked: boolean;
-  indeterminate: boolean;
-};
+import { TriStateCheckbox } from './TriStateCheckbox';
 
 type RepoEntriesByName = Record<string, FileEntry[]>;
 
@@ -27,7 +18,7 @@ type DiffViewerSidebarProps = {
   hasHistoryTab: boolean;
   activeSidebarTab: 'files' | 'history';
   setActiveSidebarTab: Dispatch<SetStateAction<'files' | 'history'>>;
-  globalSelectionState: GlobalSelectionState | null;
+  globalSelectionState: SelectionSummary | null;
   totalFiles: number;
   entries: FileEntry[];
   selections?: Record<string, DiffSelection>;
@@ -87,6 +78,18 @@ export function DiffViewerSidebar({
   historyGroupButtonRefs,
   handleHistoryGroupContextMenu,
 }: DiffViewerSidebarProps) {
+  const setEntriesSelection = (files: FileEntry[], checked: boolean) => {
+    if (!onSelectionChange) return;
+    for (const file of files) {
+      const sel = selections?.[file.key];
+      if (!sel) continue;
+      onSelectionChange(
+        file.key,
+        checked ? sel.withSelectAll() : sel.withSelectNone(),
+      );
+    }
+  };
+
   return (
     <div className="h-full min-h-0 shrink-0 overflow-y-auto border-r border-border bg-muted/30 overscroll-contain [-webkit-overflow-scrolling:touch]">
       {hasHistoryTab && (
@@ -120,25 +123,12 @@ export function DiffViewerSidebar({
         <>
           {globalSelectionState && (
             <div className="w-full px-3 py-2 flex items-center gap-2 text-xs bg-muted/50 border-b border-border">
-              <input
-                type="checkbox"
-                ref={(el) => {
-                  if (el) el.indeterminate = globalSelectionState.indeterminate;
-                }}
-                className="shrink-0 accent-blue-500"
+              <TriStateCheckbox
                 checked={globalSelectionState.checked}
-                onChange={(e) => {
-                  if (!onSelectionChange) return;
-                  const checked = e.target.checked;
-                  for (const entry of entries) {
-                    const sel = selections?.[entry.key];
-                    if (!sel) continue;
-                    onSelectionChange(
-                      entry.key,
-                      checked ? sel.withSelectAll() : sel.withSelectNone(),
-                    );
-                  }
-                }}
+                indeterminate={globalSelectionState.indeterminate}
+                onCheckedChange={(checked) =>
+                  setEntriesSelection(entries, checked)
+                }
               />
               <span className="text-muted-foreground">
                 {totalFiles} file{totalFiles !== 1 ? 's' : ''} changed
@@ -182,52 +172,24 @@ export function DiffViewerSidebar({
                       (() => {
                         if (!hasFiles) {
                           return (
-                            <input
-                              type="checkbox"
-                              className="shrink-0 opacity-30"
+                            <TriStateCheckbox
                               checked={false}
                               disabled
-                              readOnly
+                              className="shrink-0 opacity-30"
                             />
                           );
                         }
-                        const types = repoFiles.map(
-                          (f) =>
-                            selections[f.key]?.getSelectionType() ??
-                            DiffSelectionType.All,
+                        const repoSummary = summarizeSelections(
+                          repoFiles,
+                          selections,
                         );
-                        const allAll = types.every(
-                          (t) => t === DiffSelectionType.All,
-                        );
-                        const allNone = types.every(
-                          (t) => t === DiffSelectionType.None,
-                        );
-                        const repoChecked = allAll;
-                        const repoIndeterminate = !allAll && !allNone;
-                        const refCb: RefCallback<HTMLInputElement> = (el) => {
-                          if (el) el.indeterminate = repoIndeterminate;
-                        };
                         return (
-                          <input
-                            type="checkbox"
-                            ref={refCb}
-                            className="shrink-0 accent-blue-500"
-                            checked={repoChecked}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              const checked = e.target.checked;
-                              for (const f of repoFiles) {
-                                const sel = selections[f.key];
-                                if (!sel) continue;
-                                onSelectionChange(
-                                  f.key,
-                                  checked
-                                    ? sel.withSelectAll()
-                                    : sel.withSelectNone(),
-                                );
-                              }
-                            }}
-                            onClick={(e) => e.stopPropagation()}
+                          <TriStateCheckbox
+                            checked={repoSummary.checked}
+                            indeterminate={repoSummary.indeterminate}
+                            onCheckedChange={(checked) =>
+                              setEntriesSelection(repoFiles, checked)
+                            }
                           />
                         );
                       })()}
@@ -247,13 +209,7 @@ export function DiffViewerSidebar({
                 {!isCollapsed &&
                   byRepo[repoName].map((entry) => {
                     const sel = selections?.[entry.key];
-                    const selType = sel?.getSelectionType();
-                    const fileChecked = selType === DiffSelectionType.All;
-                    const fileIndeterminate = selType === DiffSelectionType.Partial;
-                    const fileNone = selType === DiffSelectionType.None;
-                    const fileRefCb: RefCallback<HTMLInputElement> = (el) => {
-                      if (el) el.indeterminate = fileIndeterminate;
-                    };
+                    const fileSummary = summarizeSelections([entry], selections);
                     return (
                       <button
                         key={entry.key}
@@ -270,25 +226,16 @@ export function DiffViewerSidebar({
                           selectedKey === entry.key
                             ? 'bg-primary/10 border-l-2 border-l-primary pl-[10px] font-medium'
                             : 'hover:bg-accent/50',
-                          fileNone && 'opacity-50',
+                          fileSummary.none && 'opacity-50',
                         )}
                       >
                         {selections && onSelectionChange && sel && (
-                          <input
-                            type="checkbox"
-                            ref={fileRefCb}
-                            className="shrink-0 accent-blue-500"
-                            checked={fileChecked}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              onSelectionChange(
-                                entry.key,
-                                e.target.checked
-                                  ? sel.withSelectAll()
-                                  : sel.withSelectNone(),
-                              );
-                            }}
-                            onClick={(e) => e.stopPropagation()}
+                          <TriStateCheckbox
+                            checked={fileSummary.checked}
+                            indeterminate={fileSummary.indeterminate}
+                            onCheckedChange={(checked) =>
+                              setEntriesSelection([entry], checked)
+                            }
                           />
                         )}
                         <span

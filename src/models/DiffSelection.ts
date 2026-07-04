@@ -83,3 +83,33 @@ export class DiffSelection {
     return new DiffSelection(DiffSelectionType.None, null);
   }
 }
+
+export interface SelectionSummary {
+  /** Every entry is fully selected */
+  checked: boolean;
+  /** Mixed state: neither all selected nor all deselected */
+  indeterminate: boolean;
+  /** Every entry is fully deselected */
+  none: boolean;
+}
+
+/**
+ * Aggregate the selection state of a set of file entries into a single
+ * tri-state checkbox summary. Entries without a selection count as All.
+ */
+export function summarizeSelections(
+  entries: ReadonlyArray<{ key: string }>,
+  selections: Record<string, DiffSelection> | undefined,
+): SelectionSummary {
+  const types = entries.map(
+    (entry) =>
+      selections?.[entry.key]?.getSelectionType() ?? DiffSelectionType.All,
+  );
+  const allAll = types.every((t) => t === DiffSelectionType.All);
+  const allNone = types.every((t) => t === DiffSelectionType.None);
+  return {
+    checked: allAll,
+    indeterminate: !allAll && !allNone,
+    none: allNone,
+  };
+}
