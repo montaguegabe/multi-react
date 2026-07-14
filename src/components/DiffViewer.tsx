@@ -28,6 +28,7 @@ export const DiffViewer = ({
   repositories,
   loading = false,
   title = 'Git Diff',
+  titleMeta,
   onRefresh,
   onPushAll,
   pushingAll = false,
@@ -326,6 +327,7 @@ export const DiffViewer = ({
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <DiffViewerHeader
         title={title}
+        titleMeta={titleMeta}
         mobile={mobile}
         sidebarOpen={sidebarOpen}
         loading={loading}

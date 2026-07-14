@@ -78,6 +78,7 @@ export interface DiffViewerProps {
   repositories: Repository[];
   loading?: boolean;
   title?: string;
+  titleMeta?: ReactNode;
   onRefresh?: () => void;
   onPushAll?: () => void;
   pushingAll?: boolean;

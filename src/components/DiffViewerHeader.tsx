@@ -4,9 +4,11 @@ import {
   PanelLeftOpen,
   RefreshCw,
 } from 'lucide-react';
+import type { ReactNode } from 'react';
 
 type DiffViewerHeaderProps = {
   title: string;
+  titleMeta?: ReactNode;
   mobile: boolean;
   sidebarOpen: boolean;
   loading: boolean;
@@ -21,6 +23,7 @@ type DiffViewerHeaderProps = {
 
 export function DiffViewerHeader({
   title,
+  titleMeta,
   mobile,
   sidebarOpen,
   loading,
@@ -59,9 +62,10 @@ export function DiffViewerHeader({
         )}
         <div>
           <h1 className="text-xl font-semibold">{title}</h1>
-          {repoCount > 1 && (
-            <p className="text-xs text-muted-foreground">{repoCount} repos</p>
-          )}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            {repoCount > 1 && <span>{repoCount} repos</span>}
+            {titleMeta}
+          </div>
         </div>
       </div>
       <div className="flex items-center gap-2">
