@@ -10,6 +10,7 @@ import {
   statusColor,
   statusLabel,
 } from './DiffViewer.shared';
+import { FilePath } from './FilePath';
 import { TriStateCheckbox } from './TriStateCheckbox';
 
 type RepoEntriesByName = Record<string, FileEntry[]>;
@@ -243,9 +244,7 @@ export function DiffViewerSidebar({
                         >
                           {statusLabel(entry.status)}
                         </span>
-                        <span className="truncate text-xs" title={entry.displayPath}>
-                          {entry.displayPath}
-                        </span>
+                        <FilePath path={entry.displayPath} className="text-xs" />
                       </button>
                     );
                   })}

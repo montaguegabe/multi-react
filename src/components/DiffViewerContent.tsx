@@ -11,6 +11,7 @@ import type {
 import { DiffRenderer } from './DiffRenderer';
 import type { GroupInfo } from './DiffRenderer';
 import { statusColor, statusLabel, type HistoryDiffEntry } from './DiffViewer.shared';
+import { FilePath } from './FilePath';
 
 type HistoryRepoGroup = {
   repoName: string;
@@ -186,12 +187,7 @@ export function DiffViewerContent({
                                   >
                                     {statusLabel(entry.status)}
                                   </span>
-                                  <span
-                                    className="truncate"
-                                    title={entry.displayPath}
-                                  >
-                                    {entry.displayPath}
-                                  </span>
+                                  <FilePath path={entry.displayPath} />
                                 </button>
 
                                 {!fileCollapsed && <DiffRenderer file={entry.file} />}

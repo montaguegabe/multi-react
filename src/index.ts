@@ -1,4 +1,5 @@
 export { DiffViewer } from './components/DiffViewer';
+export { FilePath } from './components/FilePath';
 export type {
   Repository,
   FileEntry,
